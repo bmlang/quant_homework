@@ -10,11 +10,9 @@ plt.rcParams['axes.unicode_minus'] = False
 # import statsmodels.api as sm
 import seaborn as sns
 from numpy.lib.stride_tricks import as_strided as stride
-# import feather
+import feather
 
-# stock_data = feather.read_dataframe("../data/stk_daily.feather")
-stock_data = pd.read_csv("../data/stock_data.csv",index_col=0)
-stock_data["date"] = pd.to_datetime(stock_data["date"])
+stock_data = feather.read_dataframe("../data/stk_daily.feather")
 stock_data["adj_close"] = stock_data["close"]*stock_data["cumadj"]
 stock_data["adj_open"] = stock_data["open"]*stock_data["cumadj"]
 start_time = "2022-02-01"
@@ -24,7 +22,7 @@ end_time = "2022-12-01"
 #记录几个常用的市场指数的股票池
 hs300_name = pd.read_excel("./new_data/沪深300指数成分股.xlsx")
 hs300_list = hs300_name["代码"].values
-zz1000_name = pd.read_csv("./new_data/zz1000_data.csv")
+zz1000_name = pd.read_csv("./new_data/中证1000成分股.csv")
 zz1000_list = zz1000_name["stk_id"].unique()
 all_stock_list = stock_data["stk_id"].unique()
 

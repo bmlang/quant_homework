@@ -12,14 +12,13 @@ plt.rcParams['axes.unicode_minus'] = False
 import seaborn as sns
 from numpy.lib.stride_tricks import as_strided as stride
 import scipy.optimize as scopt
+import feather
 
 
 
 
 
-# stock_data = feather.read_dataframe("../data/stk_daily.feather")
-stock_data = pd.read_csv("../data/stock_data.csv",index_col=0)
-stock_data["date"] = pd.to_datetime(stock_data["date"])
+stock_data = feather.read_dataframe("../data/stk_daily.feather")
 stock_data["adj_close"] = stock_data["close"]*stock_data["cumadj"]
 stock_data["adj_open"] = stock_data["open"]*stock_data["cumadj"]
 
@@ -27,11 +26,13 @@ stock_data["adj_open"] = stock_data["open"]*stock_data["cumadj"]
 
 def Mean_Variance_strategy(start_time, end_time, freq, stock_list, stock_data = stock_data, fee = 0):
 
+    #计算资产组合方差
     def objfunvar(W, R, target_ret):
         cov=np.cov(R.T) # var-cov matrix
         port_var = np.dot(np.dot(W,cov),W.T) # portfolio variance
         return np.sqrt(port_var)
 
+    #组合优化求解有效前沿
     def calc_efficient_frontier(returns,sellshort=True):
         result_means = []
         result_stds = []
@@ -69,7 +70,7 @@ def Mean_Variance_strategy(start_time, end_time, freq, stock_list, stock_data = 
                 'Weights': result_weights,
                 'Utilities': result_utilities}
 
-
+    #数据处理
     close_price_data = stock_data.loc[(stock_data["date"] >= start_time)&(stock_data["date"] <= end_time),
                                        ["stk_id","date","adj_close"]]
     close_price_data = close_price_data.loc[close_price_data["stk_id"].isin (stock_list)]
@@ -84,9 +85,10 @@ def Mean_Variance_strategy(start_time, end_time, freq, stock_list, stock_data = 
 
     return_data = close_price_data.pct_change()
     return_data = return_data.fillna(0)
+    return_data = return_data["adj_close",]
     change_position_date = return_data.index[range(freq-1,len(return_data), freq)] 
 
-
+    #求解最小方差组合的信号
     def generate_signal(return_data, change_position_date):
         signal_value = return_data - return_data
         effective_frontier = calc_efficient_frontier(return_data.loc[return_data.index <= change_position_date[0]], sellshort=False)
@@ -101,7 +103,8 @@ def Mean_Variance_strategy(start_time, end_time, freq, stock_list, stock_data = 
         return signal_value
     
 
-    def calculate_present_value(signal_value, open_price_data, close_price_data, fee=0):
+    #基于信号生成净值
+    def calculate_present_value(signal_value, open_price_data, close_price_data, fee=fee):
         daily_ret = [0]
         for num in range(1, len(signal_value)):
             signal_now = signal_value.iloc[num]
@@ -110,13 +113,13 @@ def Mean_Variance_strategy(start_time, end_time, freq, stock_list, stock_data = 
             pre_close_price = close_price_data.iloc[num - 1]
             open_price = open_price_data.iloc[num]
             trade_fraction = abs(signal_now - signal_pre).sum()
-            if trade_fraction == 0:
+
+            if trade_fraction == 0:   #判断是否为换仓日
                 present_value = np.dot(close_price, signal_now.T)
                 last_value = np.dot(pre_close_price, signal_now.T)
                 ret_period = 0 if (last_value == 0) else (present_value / last_value - 1)
                 daily_ret.append(ret_period)
-            else:
-                print(num)
+            else:  
                 last_change_open_price = open_price_data.iloc[num - freq]
                 change_position_time_pre = signal_pre * open_price / last_change_open_price
                 if change_position_time_pre.sum() > 0:
@@ -125,6 +128,8 @@ def Mean_Variance_strategy(start_time, end_time, freq, stock_list, stock_data = 
                 change_position_after = np.dot(open_price, signal_now.T)
                 change_position_before = np.dot(open_price, signal_pre.T)
                 last_value = np.dot(pre_close_price, signal_pre.T) 
+
+                #将换仓日的收益率分成3段来计算：前一交易日收盘-换仓日开盘；换仓前-换仓后；换仓后-换仓日收盘
                 ret_period_1 = 1 if (last_value == 0) else change_position_before / last_value
                 ret_period_2 = 1 - fee * trade_fraction
                 ret_period_3 = present_value / change_position_after

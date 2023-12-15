@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import feather
 
 
 def Log(sr):
@@ -85,8 +86,7 @@ def Returns(df):
 
 class Alpha191_first20():
 
-    # stock_data = feather.read_dataframe("../data/stk_daily.feather")
-    stock_data = pd.read_csv("../data/stock_data.csv",index_col=0)
+    stock_data = feather.read_dataframe("../data/stk_daily.feather")
     stock_data["date"] = pd.to_datetime(stock_data["date"])
     stock_data["open"] *= stock_data["cumadj"]
     stock_data["high"] *= stock_data["cumadj"]
